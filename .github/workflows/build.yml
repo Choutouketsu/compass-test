@@ -1,0 +1,52 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18
+
+    - name: Install Capacitor CLI
+      run: npm install -g @capacitor/cli @capacitor/core @capacitor/android
+
+    - name: Create Capacitor Config
+      run: |
+        npx cap init "Compass App" "com.example.compass" --web-dir .
+
+    - name: Add Android Platform
+      run: |
+        npm install @capacitor/android
+        npx cap add android
+
+    - name: Sync Project
+      run: npx cap sync
+
+    - name: Setup Java JDK
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+
+    - name: Build Debug APK
+      run: |
+        cd android
+        chmod +x gradlew
+        ./gradlew assembleDebug
+
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: compass-app
+        path: android/app/build/outputs/apk/debug/app-debug.apk
