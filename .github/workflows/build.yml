@@ -13,39 +13,51 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Setup Java JDK
+    - name: Setup Java JDK 17
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: Create Standard Android Project
+    # 关键：不使用系统自带的 Gradle 9.x，而是安装与 AGP 7.4.2 匹配的 7.5.1
+    - name: Setup Gradle 7.5.1
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        gradle-version: '7.5.1'
+
+    - name: Prepare Android SDK
       run: |
-        # 1. 建立标准目录
+        yes | sdkmanager --licenses > /dev/null 2>&1 || true
+        sdkmanager "platforms;android-33" "build-tools;33.0.2" > /dev/null
+
+    - name: Create Android Project
+      run: |
         mkdir -p my-app/app/src/main/java/com/example/compass
-        mkdir -p my-app/app/src/main/res/values
         mkdir -p my-app/app/src/main/assets
 
-        # 2. 拷贝网页代码
-        if [ -d "www" ]; then
+        # 拷贝网页代码（优先 www/，其次根目录 index.html）
+        if [ -f "www/index.html" ]; then
           cp -r www/* my-app/app/src/main/assets/
+        elif [ -f "index.html" ]; then
+          cp index.html my-app/app/src/main/assets/
         else
-          mkdir -p my-app/app/src/main/assets/
-          cp index.html my-app/app/src/main/assets/ || echo "No html found"
+          echo "ERROR: 找不到 index.html（请放在仓库根目录或 www/ 目录）"
+          exit 1
         fi
 
-        # 3. 编写清单文件
+        # ---------- AndroidManifest ----------
         cat << 'EOF' > my-app/app/src/main/AndroidManifest.xml
+        <?xml version="1.0" encoding="utf-8"?>
         <manifest xmlns:android="http://schemas.android.com/apk/res/android"
             package="com.example.compass">
-            <uses-permission android:name="android.permission.INTERNET" />
             <application
                 android:allowBackup="true"
                 android:label="指南针"
-                android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
                 <activity
                     android:name=".MainActivity"
-                    android:exported="true">
+                    android:exported="true"
+                    android:screenOrientation="portrait">
                     <intent-filter>
                         <action android:name="android.intent.action.MAIN" />
                         <category android:name="android.intent.category.LAUNCHER" />
@@ -55,37 +67,127 @@ jobs:
         </manifest>
         EOF
 
-        # 4. 编写 Java 主代码
+        # ---------- MainActivity：用原生传感器读取方位角，再传给网页 ----------
         cat << 'EOF' > my-app/app/src/main/java/com/example/compass/MainActivity.java
         package com.example.compass;
-        import android.app.Activity;
-        import android.os.Bundle;
-        import android.webkit.WebView;
-        import android.webkit.WebSettings;
-        import android.webkit.PermissionRequest;
-        import android.webkit.WebChromeClient;
 
-        public class MainActivity extends Activity {
+        import android.app.Activity;
+        import android.graphics.Color;
+        import android.hardware.Sensor;
+        import android.hardware.SensorEvent;
+        import android.hardware.SensorEventListener;
+        import android.hardware.SensorManager;
+        import android.os.Bundle;
+        import android.view.WindowManager;
+        import android.webkit.WebSettings;
+        import android.webkit.WebView;
+        import android.webkit.WebViewClient;
+        import java.util.Locale;
+
+        public class MainActivity extends Activity implements SensorEventListener {
+            private WebView webView;
+            private SensorManager sm;
+            private Sensor rotationSensor, accelSensor, magnetSensor;
+            private boolean pageReady = false;
+
+            private final float[] rMat = new float[9];
+            private final float[] rOut = new float[9];
+            private final float[] ori = new float[3];
+            private float[] gravity = null;
+            private float[] geomagnetic = null;
+
             @Override
             protected void onCreate(Bundle savedInstanceState) {
                 super.onCreate(savedInstanceState);
-                WebView webView = new WebView(this);
+                getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+                webView = new WebView(this);
+                webView.setBackgroundColor(Color.parseColor("#0f172a"));
                 WebSettings settings = webView.getSettings();
                 settings.setJavaScriptEnabled(true);
                 settings.setDomStorageEnabled(true);
-                webView.setWebChromeClient(new WebChromeClient() {
+                webView.setWebViewClient(new WebViewClient() {
                     @Override
-                    public void onPermissionRequest(final PermissionRequest request) {
-                        request.grant(request.getResources());
+                    public void onPageFinished(WebView view, String url) {
+                        pageReady = true;
+                        callJs("window.onNativeReady && onNativeReady(" + (rotationSensor != null || (accelSensor != null && magnetSensor != null)) + ")");
                     }
                 });
-                webView.loadUrl("file:///android_asset/index.html");
                 setContentView(webView);
+
+                sm = (SensorManager) getSystemService(SENSOR_SERVICE);
+                rotationSensor = sm.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
+                accelSensor = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+                magnetSensor = sm.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+
+                webView.loadUrl("file:///android_asset/index.html");
+            }
+
+            @Override
+            protected void onResume() {
+                super.onResume();
+                if (rotationSensor != null) {
+                    sm.registerListener(this, rotationSensor, SensorManager.SENSOR_DELAY_GAME);
+                } else if (accelSensor != null && magnetSensor != null) {
+                    sm.registerListener(this, accelSensor, SensorManager.SENSOR_DELAY_GAME);
+                    sm.registerListener(this, magnetSensor, SensorManager.SENSOR_DELAY_GAME);
+                }
+            }
+
+            @Override
+            protected void onPause() {
+                super.onPause();
+                sm.unregisterListener(this);
+            }
+
+            @Override
+            public void onSensorChanged(SensorEvent event) {
+                boolean ok = false;
+                if (event.sensor.getType() == Sensor.TYPE_ROTATION_VECTOR) {
+                    SensorManager.getRotationMatrixFromVector(rMat, event.values);
+                    ok = true;
+                } else if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+                    gravity = event.values.clone();
+                } else if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
+                    geomagnetic = event.values.clone();
+                }
+                if (!ok && gravity != null && geomagnetic != null) {
+                    ok = SensorManager.getRotationMatrix(rMat, null, gravity, geomagnetic);
+                }
+                if (!ok) return;
+
+                float[] m = rMat;
+                // 手机竖直持握时（屏幕朝向用户），换算坐标系，方位角才准确
+                if (Math.abs(rMat[8]) < 0.5f) {
+                    SensorManager.remapCoordinateSystem(rMat, SensorManager.AXIS_X, SensorManager.AXIS_Z, rOut);
+                    m = rOut;
+                }
+                SensorManager.getOrientation(m, ori);
+                float deg = (float) Math.toDegrees(ori[0]);
+                deg = (deg + 360f) % 360f;
+                callJs(String.format(Locale.US, "window.setHeading && setHeading(%.1f)", deg));
+            }
+
+            @Override
+            public void onAccuracyChanged(Sensor sensor, int accuracy) {
+                if (sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD || sensor.getType() == Sensor.TYPE_ROTATION_VECTOR) {
+                    callJs("window.setAccuracy && setAccuracy(" + accuracy + ")");
+                }
+            }
+
+            private void callJs(final String js) {
+                if (!pageReady) return;
+                webView.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        webView.evaluateJavascript(js, null);
+                    }
+                });
             }
         }
         EOF
 
-        # 5. 编写兼容 Gradle 7.x 的配置
+        # ---------- Gradle 配置 ----------
         cat << 'EOF' > my-app/build.gradle
         buildscript {
             repositories {
@@ -105,11 +207,18 @@ jobs:
         EOF
 
         cat << 'EOF' > my-app/settings.gradle
+        rootProject.name = 'compass'
         include ':app'
+        EOF
+
+        cat << 'EOF' > my-app/gradle.properties
+        org.gradle.jvmargs=-Xmx2g
+        android.useAndroidX=false
         EOF
 
         cat << 'EOF' > my-app/app/build.gradle
         apply plugin: 'com.android.application'
+
         android {
             compileSdkVersion 33
             defaultConfig {
@@ -119,19 +228,17 @@ jobs:
                 versionCode 1
                 versionName "1.0"
             }
-        }
-        dependencies {
-            implementation 'androidx.appcompat:appcompat:1.6.1'
+            compileOptions {
+                sourceCompatibility JavaVersion.VERSION_1_8
+                targetCompatibility JavaVersion.VERSION_1_8
+            }
         }
         EOF
 
-    - name: Generate Gradle Wrapper and Build APK
+    - name: Build APK
       run: |
         cd my-app
-        # 在项目目录中现场生成 gradle-wrapper 脚本和依赖文件
-        gradle wrapper --gradle-version 7.5
-        chmod +x gradlew
-        ./gradlew assembleDebug --no-daemon
+        gradle assembleDebug --no-daemon --stacktrace
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
