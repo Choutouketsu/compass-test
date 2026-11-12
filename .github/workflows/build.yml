@@ -39,6 +39,19 @@ jobs:
         distribution: 'zulu'
         java-version: '17'
 
+    - name: Configure Tencent Maven Mirror
+      run: |
+        # 使用sed命令在Android项目的build.gradle中自动加入腾讯云等国内镜像源
+        BUILD_FILE="android/build.gradle"
+        if [ -f "$BUILD_FILE" ]; then
+          sed -i '/repositories {/a \
+              maven { url "https://mirrors.cloud.tencent.com/nexus/content/groups/public/" } \
+              maven { url "https://maven.aliyun.com/repository/public" } \
+              google() \
+              mavenCentral()' $BUILD_FILE
+          echo "Tencent Maven mirror added successfully!"
+        fi
+
     - name: Build Debug APK
       run: |
         cd android
