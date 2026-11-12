@@ -138,9 +138,8 @@ jobs:
     - name: Build APK with Gradle Wrapper
       run: |
         cd my-app
-        # 强制利用 gradle 命令生成专属的 gradlew 可执行脚本
-        gradle wrapper --gradle-version 7.5
-        chmod +x gradlew
+        # 显式使用当前目录下的 gradlew，并加上 --no-daemon 彻底隔离全局环境
+        ./gradlew wrapper --gradle-version 7.5
         ./gradlew assembleDebug --no-daemon
 
     - name: Upload APK Artifact
