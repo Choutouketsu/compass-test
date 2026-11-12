@@ -27,8 +27,19 @@ jobs:
 
     - name: Prepare Android SDK
       run: |
-        yes | sdkmanager --licenses > /dev/null 2>&1 || true
-        sdkmanager "platforms;android-33" "build-tools;33.0.2" > /dev/null
+        SDKM=$(command -v sdkmanager || true)
+        if [ -z "$SDKM" ]; then
+          SDKM=$(find "${ANDROID_HOME:-$ANDROID_SDK_ROOT}" -name sdkmanager -type f 2>/dev/null | head -n 1)
+        fi
+        if [ -n "$SDKM" ]; then
+          set +o pipefail
+          yes | "$SDKM" --licenses > /dev/null 2>&1
+          "$SDKM" "platforms;android-33" "build-tools;33.0.2" > /dev/null 2>&1 || true
+        else
+          echo "sdkmanager not found, skip (runner preinstalled SDK is used)"
+        fi
+        echo "ANDROID_HOME=$ANDROID_HOME"
+        ls "$ANDROID_HOME/platforms" 2>/dev/null || true
 
     - name: Create Android Project
       run: |
