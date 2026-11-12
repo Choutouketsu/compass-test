@@ -19,7 +19,7 @@ jobs:
         distribution: 'zulu'
         java-version: '17'
 
-    # 关键：不使用系统自带的 Gradle 9.x，而是安装与 AGP 7.4.2 匹配的 7.5.1
+    # 安装与 AGP 7.4.2 匹配的 Gradle 7.5.1（不要用系统自带的 Gradle 9.x）
     - name: Setup Gradle 7.5.1
       uses: gradle/actions/setup-gradle@v4
       with:
@@ -45,6 +45,9 @@ jobs:
       run: |
         mkdir -p my-app/app/src/main/java/com/example/compass
         mkdir -p my-app/app/src/main/assets
+        mkdir -p my-app/app/src/main/res/drawable
+        mkdir -p my-app/app/src/main/res/values
+        mkdir -p my-app/app/src/main/res/mipmap-anydpi-v26
 
         # 拷贝网页代码（优先 www/，其次根目录 index.html）
         if [ -f "www/index.html" ]; then
@@ -64,6 +67,8 @@ jobs:
             <application
                 android:allowBackup="true"
                 android:label="指南针"
+                android:icon="@mipmap/ic_launcher"
+                android:roundIcon="@mipmap/ic_launcher_round"
                 android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
                 <activity
                     android:name=".MainActivity"
@@ -78,7 +83,61 @@ jobs:
         </manifest>
         EOF
 
-        # ---------- MainActivity：用原生传感器读取方位角，再传给网页 ----------
+        # ---------- App 图标（自适应图标，矢量绘制） ----------
+        cat << 'EOF' > my-app/app/src/main/res/values/colors.xml
+        <?xml version="1.0" encoding="utf-8"?>
+        <resources>
+            <color name="ic_launcher_background">#0F172A</color>
+        </resources>
+        EOF
+
+        cat << 'EOF' > my-app/app/src/main/res/drawable/ic_launcher_foreground.xml
+        <?xml version="1.0" encoding="utf-8"?>
+        <vector xmlns:android="http://schemas.android.com/apk/res/android"
+            android:width="108dp"
+            android:height="108dp"
+            android:viewportWidth="108"
+            android:viewportHeight="108">
+            <!-- 外圈 -->
+            <path
+                android:fillColor="#00000000"
+                android:strokeColor="#38BDF8"
+                android:strokeWidth="2.5"
+                android:pathData="M54,26 A28,28 0 1,1 54,82 A28,28 0 1,1 54,26 Z" />
+            <!-- 东西刻度 -->
+            <path
+                android:fillColor="#00000000"
+                android:strokeColor="#64748B"
+                android:strokeWidth="2"
+                android:strokeLineCap="round"
+                android:pathData="M31,54 L35,54 M73,54 L77,54" />
+            <!-- 南针（银灰） -->
+            <path
+                android:fillColor="#94A3B8"
+                android:pathData="M54,77 L61,54 L47,54 Z" />
+            <!-- 北针（红） -->
+            <path
+                android:fillColor="#F43F5E"
+                android:pathData="M54,31 L61,54 L47,54 Z" />
+            <!-- 中心点 -->
+            <path
+                android:fillColor="#F8FAFC"
+                android:pathData="M54,50 A4,4 0 1,1 54,58 A4,4 0 1,1 54,50 Z" />
+        </vector>
+        EOF
+
+        cat << 'EOF' > my-app/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+        <?xml version="1.0" encoding="utf-8"?>
+        <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+            <background android:drawable="@color/ic_launcher_background" />
+            <foreground android:drawable="@drawable/ic_launcher_foreground" />
+        </adaptive-icon>
+        EOF
+
+        cp my-app/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml \
+           my-app/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+
+        # ---------- MainActivity ----------
         cat << 'EOF' > my-app/app/src/main/java/com/example/compass/MainActivity.java
         package com.example.compass;
 
@@ -90,6 +149,7 @@ jobs:
         import android.hardware.SensorManager;
         import android.os.Bundle;
         import android.view.WindowManager;
+        import android.webkit.JavascriptInterface;
         import android.webkit.WebSettings;
         import android.webkit.WebView;
         import android.webkit.WebViewClient;
@@ -100,6 +160,7 @@ jobs:
             private SensorManager sm;
             private Sensor rotationSensor, accelSensor, magnetSensor;
             private boolean pageReady = false;
+            private int lastAcc = -1;
 
             private final float[] rMat = new float[9];
             private final float[] rOut = new float[9];
@@ -107,42 +168,69 @@ jobs:
             private float[] gravity = null;
             private float[] geomagnetic = null;
 
+            /** 网页里的“校准”按钮会调用这里：重启传感器，重新采集磁场数据 */
+            public class Bridge {
+                @JavascriptInterface
+                public void restartSensors() {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            gravity = null;
+                            geomagnetic = null;
+                            startSensors();
+                        }
+                    });
+                }
+            }
+
             @Override
             protected void onCreate(Bundle savedInstanceState) {
                 super.onCreate(savedInstanceState);
                 getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
-                webView = new WebView(this);
-                webView.setBackgroundColor(Color.parseColor("#0f172a"));
-                WebSettings settings = webView.getSettings();
-                settings.setJavaScriptEnabled(true);
-                settings.setDomStorageEnabled(true);
-                webView.setWebViewClient(new WebViewClient() {
-                    @Override
-                    public void onPageFinished(WebView view, String url) {
-                        pageReady = true;
-                        callJs("window.onNativeReady && onNativeReady(" + (rotationSensor != null || (accelSensor != null && magnetSensor != null)) + ")");
-                    }
-                });
-                setContentView(webView);
 
                 sm = (SensorManager) getSystemService(SENSOR_SERVICE);
                 rotationSensor = sm.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
                 accelSensor = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
                 magnetSensor = sm.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
 
+                webView = new WebView(this);
+                webView.setBackgroundColor(Color.parseColor("#0f172a"));
+                WebSettings settings = webView.getSettings();
+                settings.setJavaScriptEnabled(true);
+                settings.setDomStorageEnabled(true);
+                webView.addJavascriptInterface(new Bridge(), "AndroidCompass");
+                webView.setWebViewClient(new WebViewClient() {
+                    @Override
+                    public void onPageFinished(WebView view, String url) {
+                        pageReady = true;
+                        lastAcc = -1; // 让下一次传感器事件把精度重新发给网页
+                        boolean has = rotationSensor != null || (accelSensor != null && magnetSensor != null);
+                        callJs("window.onNativeReady && onNativeReady(" + has + ")");
+                    }
+                });
+                setContentView(webView);
                 webView.loadUrl("file:///android_asset/index.html");
+            }
+
+            private void startSensors() {
+                sm.unregisterListener(this);
+                lastAcc = -1;
+                if (rotationSensor != null) {
+                    sm.registerListener(this, rotationSensor, SensorManager.SENSOR_DELAY_GAME);
+                    // 磁力计只用来读取“精度”
+                    if (magnetSensor != null) {
+                        sm.registerListener(this, magnetSensor, SensorManager.SENSOR_DELAY_GAME);
+                    }
+                } else if (accelSensor != null && magnetSensor != null) {
+                    sm.registerListener(this, accelSensor, SensorManager.SENSOR_DELAY_GAME);
+                    sm.registerListener(this, magnetSensor, SensorManager.SENSOR_DELAY_GAME);
+                }
             }
 
             @Override
             protected void onResume() {
                 super.onResume();
-                if (rotationSensor != null) {
-                    sm.registerListener(this, rotationSensor, SensorManager.SENSOR_DELAY_GAME);
-                } else if (accelSensor != null && magnetSensor != null) {
-                    sm.registerListener(this, accelSensor, SensorManager.SENSOR_DELAY_GAME);
-                    sm.registerListener(this, magnetSensor, SensorManager.SENSOR_DELAY_GAME);
-                }
+                startSensors();
             }
 
             @Override
@@ -153,22 +241,31 @@ jobs:
 
             @Override
             public void onSensorChanged(SensorEvent event) {
+                int type = event.sensor.getType();
+
+                if (type == Sensor.TYPE_MAGNETIC_FIELD) {
+                    if (event.accuracy != lastAcc) {
+                        lastAcc = event.accuracy;
+                        callJs("window.setAccuracy && setAccuracy(" + lastAcc + ")");
+                    }
+                    geomagnetic = event.values.clone();
+                    if (rotationSensor != null) return;
+                } else if (type == Sensor.TYPE_ACCELEROMETER) {
+                    gravity = event.values.clone();
+                    if (rotationSensor != null) return;
+                }
+
                 boolean ok = false;
-                if (event.sensor.getType() == Sensor.TYPE_ROTATION_VECTOR) {
+                if (type == Sensor.TYPE_ROTATION_VECTOR) {
                     SensorManager.getRotationMatrixFromVector(rMat, event.values);
                     ok = true;
-                } else if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
-                    gravity = event.values.clone();
-                } else if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
-                    geomagnetic = event.values.clone();
-                }
-                if (!ok && gravity != null && geomagnetic != null) {
+                } else if (rotationSensor == null && gravity != null && geomagnetic != null) {
                     ok = SensorManager.getRotationMatrix(rMat, null, gravity, geomagnetic);
                 }
                 if (!ok) return;
 
                 float[] m = rMat;
-                // 手机竖直持握时（屏幕朝向用户），换算坐标系，方位角才准确
+                // 手机竖直持握时换算坐标系，方位角才准确
                 if (Math.abs(rMat[8]) < 0.5f) {
                     SensorManager.remapCoordinateSystem(rMat, SensorManager.AXIS_X, SensorManager.AXIS_Z, rOut);
                     m = rOut;
@@ -181,9 +278,7 @@ jobs:
 
             @Override
             public void onAccuracyChanged(Sensor sensor, int accuracy) {
-                if (sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD || sensor.getType() == Sensor.TYPE_ROTATION_VECTOR) {
-                    callJs("window.setAccuracy && setAccuracy(" + accuracy + ")");
-                }
+                // 精度统一在 onSensorChanged 里通过 event.accuracy 上报
             }
 
             private void callJs(final String js) {
@@ -227,6 +322,7 @@ jobs:
         android.useAndroidX=false
         EOF
 
+        # minSdk 26：自适应图标需要 Android 8.0+
         cat << 'EOF' > my-app/app/build.gradle
         apply plugin: 'com.android.application'
 
@@ -234,10 +330,10 @@ jobs:
             compileSdkVersion 33
             defaultConfig {
                 applicationId "com.example.compass"
-                minSdkVersion 24
+                minSdkVersion 26
                 targetSdkVersion 33
-                versionCode 1
-                versionName "1.0"
+                versionCode 2
+                versionName "1.1"
             }
             compileOptions {
                 sourceCompatibility JavaVersion.VERSION_1_8
