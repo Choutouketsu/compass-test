@@ -39,24 +39,24 @@ jobs:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: Configure Tencent Maven Mirror
+    - name: Force Gradle Mirror and Clean Caches
       run: |
-        # 使用sed命令在Android项目的build.gradle中自动加入腾讯云等国内镜像源
-        BUILD_FILE="android/build.gradle"
-        if [ -f "$BUILD_FILE" ]; then
-          sed -i '/repositories {/a \
-              maven { url "https://mirrors.cloud.tencent.com/nexus/content/groups/public/" } \
-              maven { url "https://maven.aliyun.com/repository/public" } \
-              google() \
-              mavenCentral()' $BUILD_FILE
-          echo "Tencent Maven mirror added successfully!"
+        # 彻底清理可能损坏的Gradle缓存
+        rm -rf ~/.gradle/caches/
+        rm -rf ~/.gradle/wrapper/
+        
+        # 在 Android 项目的 build.gradle 顶部直接强制重写 repositories
+        BUILD_G_FILE="android/build.gradle"
+        if [ -f "$BUILD_G_FILE" ]; then
+          sed -i '1i allprojects { repositories { maven { url "https://mirrors.cloud.tencent.com/nexus/content/groups/public/" } maven { url "https://maven.aliyun.com/repository/public" } google() mavenCentral() } }' $BUILD_G_FILE
+          echo "Injected global Tencent/Aliyun mirrors successfully!"
         fi
 
     - name: Build Debug APK
       run: |
         cd android
         chmod +x gradlew
-        ./gradlew assembleDebug
+        ./gradlew assembleDebug --no-daemon
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
