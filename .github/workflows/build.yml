@@ -13,40 +13,139 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: 18
-
     - name: Setup Java JDK
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: Install Capacitor and Create App
+    - name: Create Native Android WebView Project
       run: |
-        npm install -g @capacitor/cli @capacitor/core @capacitor/android
-        npx cap init "Compass App" "com.example.compass" --web-dir www
-        npm install @capacitor/android
-        npx cap add android
+        # 创建一个标准的最小化 Android 项目结构，不需要复杂的 npm 依赖
+        mkdir -p my-app/app/src/main/java/com/example/compass
+        mkdir -p my-app/app/src/main/res/values
+        mkdir -p my-app/app/src/main/res/layout
+        mkdir -p my-app/app/src/main/assets
 
-    - name: Use Stable Gradle Dependencies
-      run: |
-        # 移除可能引起下载冲突的第三方加密包，确保使用 Gradle 内置安全库
-        ANDROID_BUILD="android/app/build.gradle"
-        if [ -f "$ANDROID_BUILD" ]; then
-          sed -i '/bcprov/d' $ANDROID_BUILD || true
-        fi
+        # 把你的指南针网页复制到 Android 的 assets 目录中
+        cp -r www/* my-app/app/src/main/assets/
 
-    - name: Build Debug APK
+        # 写入 AndroidManifest.xml 权限配置文件
+        cat << 'EOF' > my-app/app/src/main/AndroidManifest.xml
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+            package="com.example.compass">
+            <uses-permission android:name="android.permission.INTERNET" />
+            <application
+                android:allowBackup="true"
+                android:icon="@mipmap/ic_launcher"
+                android:label="指南针"
+                android:roundIcon="@mipmap/ic_launcher"
+                android:supportsRtl="true"
+                android:theme="@style/Theme.AppCompat.NoActionBar">
+                <activity
+                    android:name=".MainActivity"
+                    android:exported="true">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN" />
+                        <category android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+                </activity>
+            </application>
+        </manifest>
+        EOF
+
+        # 写入 MainActivity.java 主程序（直接加载本地网页）
+        cat << 'EOF' > my-app/app/src/main/java/com/example/compass/MainActivity.java
+        package com.example.compass;
+        import android.app.Activity;
+        import android.os.Bundle;
+        import android.webkit.WebView;
+        import android.webkit.WebSettings;
+        import android.webkit.PermissionRequest;
+        import android.webkit.WebChromeClient;
+
+        public class MainActivity extends Activity {
+            private WebView webView;
+            @Override
+            protected void onCreate(Bundle savedInstanceState) {
+                super.onCreate(savedInstanceState);
+                webView = new WebView(this);
+                WebSettings settings = webView.getSettings();
+                settings.setJavaScriptEnabled(true);
+                settings.setDomStorageEnabled(true);
+                webView.setWebChromeClient(new WebChromeClient() {
+                    @Override
+                    public void onPermissionRequest(final PermissionRequest request) {
+                        request.grant(request.getResources());
+                    }
+                });
+                webView.loadUrl("file:///android_asset/index.html");
+                setContentView(webView);
+            }
+        }
+        EOF
+
+        # 写入最简 build.gradle 编译配置（完全避开第三方复杂依赖）
+        cat << 'EOF' > my-app/build.gradle
+        buildscript {
+            repositories {
+                google()
+                mavenCentral()
+            }
+            dependencies {
+                classpath 'com.android.tools.build:gradle:7.4.2'
+            }
+        }
+        allprojects {
+            repositories {
+                google()
+                mavenCentral()
+            }
+        }
+        EOF
+
+        cat << 'EOF' > my-app/settings.gradle
+        include ':app'
+        EOF
+
+        cat << 'EOF' > my-app/app/build.gradle
+        plugins {
+            id 'com.android.application'
+        }
+        android {
+            compileSdk 33
+            defaultConfig {
+                applicationId "com.example.compass"
+                minSdk 24
+                targetSdk 33
+                versionCode 1
+                versionName "1.0"
+            }
+        }
+        dependencies {
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+        }
+        EOF
+
+        # 写入 Gradle Wrapper 配置文件
+        mkdir -p my-app/gradle/wrapper
+        cat << 'EOF' > my-app/gradle/wrapper/gradle-wrapper.properties
+        distributionBase=GRADLE_USER_HOME
+        distributionPath=wrapper/dists
+        distributionUrl=https\://services.gradle.org/distributions/gradle-7.5-bin.zip
+        zipStoreFile=-1
+        path=https\://services.gradle.org/distributions/gradle-7.5-bin.zip
+        EOF
+
+    - name: Build Native APK
       run: |
-        cd android
-        chmod +x gradlew
+        cd my-app
+        gradle wrapper --gradle-version 7.5 || true
+        chmod +x gradlew || gradle wrapper
         ./gradlew assembleDebug --no-daemon
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: compass-app
-        path: android/app/build/outputs/apk/debug/app-debug.apk
+        path: my-app/app/build/outputs/apk/debug/app-debug.apk
