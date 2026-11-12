@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>炫酷指南针</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body {
       background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
       color: #f8fafc;
@@ -56,7 +56,6 @@
       background: radial-gradient(circle, rgba(56,189,248,0.15) 0%, rgba(0,0,0,0) 70%);
       box-shadow: inset 0 0 20px rgba(56, 189, 248, 0.2);
     }
-    /* 固定在顶部的“手机朝向”标记 */
     .heading-marker {
       position: absolute;
       top: -6px;
@@ -69,7 +68,6 @@
       filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.8));
       z-index: 5;
     }
-
     .compass-dial {
       width: 260px;
       height: 260px;
@@ -90,72 +88,69 @@
     .mark-s { bottom: 10px; left: 50%; margin-left: -12px; }
     .mark-e { right: 8px; top: 50%; margin-top: -9px; }
     .mark-w { left: 8px; top: 50%; margin-top: -9px; }
-
-    /* 刻度线 */
-    .tick {
-      position: absolute;
-      left: 50%; top: 0;
-      width: 2px; height: 100%;
-      margin-left: -1px;
-    }
+    .tick { position: absolute; left: 50%; top: 0; width: 2px; height: 100%; margin-left: -1px; }
     .tick::before {
-      content: "";
-      position: absolute;
-      top: 0; left: 0;
-      width: 2px; height: 8px;
-      background: rgba(255,255,255,0.25);
+      content: ""; position: absolute; top: 0; left: 0;
+      width: 2px; height: 8px; background: rgba(255,255,255,0.25);
     }
     .tick.major::before { height: 14px; background: rgba(255,255,255,0.5); }
-
-    .pointer-group {
-      position: absolute;
-      inset: 0;
-    }
+    .pointer-group { position: absolute; inset: 0; }
     .needle-n {
-      position: absolute;
-      top: 38px;
-      left: 50%;
-      margin-left: -10px;
+      position: absolute; top: 38px; left: 50%; margin-left: -10px;
       width: 0; height: 0;
-      border-left: 10px solid transparent;
-      border-right: 10px solid transparent;
+      border-left: 10px solid transparent; border-right: 10px solid transparent;
       border-bottom: 92px solid #f43f5e;
       filter: drop-shadow(0 0 6px rgba(244, 63, 94, 0.6));
     }
     .needle-s {
-      position: absolute;
-      bottom: 38px;
-      left: 50%;
-      margin-left: -10px;
+      position: absolute; bottom: 38px; left: 50%; margin-left: -10px;
       width: 0; height: 0;
-      border-left: 10px solid transparent;
-      border-right: 10px solid transparent;
+      border-left: 10px solid transparent; border-right: 10px solid transparent;
       border-top: 92px solid #94a3b8;
     }
     .center-hub {
-      position: absolute;
-      width: 20px; height: 20px;
+      position: absolute; width: 20px; height: 20px;
       background: linear-gradient(135deg, #f8fafc, #cbd5e1);
-      border-radius: 50%;
-      box-shadow: 0 0 10px rgba(0,0,0,0.5);
-      z-index: 10;
+      border-radius: 50%; box-shadow: 0 0 10px rgba(0,0,0,0.5); z-index: 10;
     }
 
     .footer { width: 100%; max-width: 300px; margin-bottom: 20px; text-align: center; }
-    .status { font-size: 13px; color: #94a3b8; min-height: 20px; margin-bottom: 12px; }
+    .status {
+      font-size: 13px; color: #94a3b8; min-height: 20px; margin-bottom: 12px;
+      display: inline-block; padding: 4px 12px; border-radius: 12px;
+    }
+    .status.warn { color: #fbbf24; background: rgba(251, 191, 36, 0.12); }
+    .status.good { color: #4ade80; }
     .btn {
-      width: 100%;
-      padding: 14px;
+      width: 100%; padding: 14px;
       background: linear-gradient(135deg, #38bdf8 0%, #2563eb 100%);
-      color: white;
-      border: none;
-      border-radius: 14px;
-      font-size: 16px;
-      font-weight: 600;
-      box-shadow: 0 4px 20px rgba(37, 99, 235, 0.4);
-      cursor: pointer;
+      color: white; border: none; border-radius: 14px;
+      font-size: 16px; font-weight: 600;
+      box-shadow: 0 4px 20px rgba(37, 99, 235, 0.4); cursor: pointer;
     }
     .btn:active { transform: scale(0.96); }
+    .btn.ghost {
+      background: rgba(255,255,255,0.08); box-shadow: none; margin-top: 10px;
+    }
+
+    /* ---------- 校准遮罩 ---------- */
+    .overlay {
+      position: fixed; inset: 0; z-index: 100;
+      background: rgba(10, 15, 35, 0.97);
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      padding: 30px 24px; text-align: center;
+    }
+    .overlay.show { display: flex; }
+    .cal-title { font-size: 24px; font-weight: 800; margin-bottom: 8px; }
+    .cal-hint { font-size: 14px; color: #94a3b8; line-height: 1.6; max-width: 300px; margin-bottom: 18px; }
+    .cal-svg { width: 260px; height: 130px; margin-bottom: 18px; }
+    .acc-bars { display: flex; gap: 6px; width: 260px; margin-bottom: 8px; }
+    .acc-bars span { flex: 1; height: 8px; border-radius: 4px; background: rgba(255,255,255,0.12); transition: background .3s; }
+    .acc-bars span.on-1 { background: #f43f5e; }
+    .acc-bars span.on-2 { background: #fbbf24; }
+    .acc-bars span.on-3 { background: #4ade80; }
+    .acc-text { font-size: 14px; color: #cbd5e1; margin-bottom: 26px; min-height: 20px; }
+    .cal-actions { width: 260px; }
   </style>
 </head>
 <body>
@@ -182,8 +177,33 @@
   </div>
 
   <div class="footer">
-    <div class="status" id="statusText">正在等待传感器…</div>
-    <button class="btn" id="btn" onclick="requestPermission()">校准 / 开启传感器</button>
+    <div class="status" id="statusText" onclick="openCal()">正在等待传感器…</div>
+    <button class="btn" onclick="openCal()">校准指南针</button>
+  </div>
+
+  <!-- 校准遮罩 -->
+  <div class="overlay" id="overlay">
+    <div class="cal-title" id="calTitle">校准指南针</div>
+    <div class="cal-hint" id="calHint">
+      手持手机，沿下图轨迹在空中缓慢画“8”字，并同时翻转、倾斜手机。持续 5～10 秒。
+    </div>
+
+    <svg class="cal-svg" viewBox="0 0 200 100">
+      <path id="eight" d="M100,50 C130,10 190,10 190,50 C190,90 130,90 100,50 C70,10 10,10 10,50 C10,90 70,90 100,50 Z"
+            fill="none" stroke="rgba(56,189,248,0.35)" stroke-width="3" stroke-linecap="round" stroke-dasharray="2 7"/>
+      <circle r="7" fill="#38bdf8">
+        <animateMotion dur="3.2s" repeatCount="indefinite"
+          path="M100,50 C130,10 190,10 190,50 C190,90 130,90 100,50 C70,10 10,10 10,50 C10,90 70,90 100,50 Z"/>
+      </circle>
+    </svg>
+
+    <div class="acc-bars" id="accBars"><span></span><span></span><span></span><span></span></div>
+    <div class="acc-text" id="accText">等待传感器数据…</div>
+
+    <div class="cal-actions">
+      <button class="btn" onclick="closeCal()">完成</button>
+      <button class="btn ghost" onclick="restartCal()">重新开始</button>
+    </div>
   </div>
 
   <script>
@@ -191,9 +211,14 @@
     const degreeText = document.getElementById('degreeText');
     const directionText = document.getElementById('directionText');
     const statusText = document.getElementById('statusText');
-    const btn = document.getElementById('btn');
+    const overlay = document.getElementById('overlay');
+    const calTitle = document.getElementById('calTitle');
+    const accText = document.getElementById('accText');
+    const accBars = Array.from(document.querySelectorAll('#accBars span'));
 
-    // 生成刻度线（每 10° 一条，每 30° 加粗）
+    const IN_APP = !!window.AndroidCompass;
+
+    // 刻度线
     for (let a = 0; a < 360; a += 10) {
       const t = document.createElement('div');
       t.className = 'tick' + (a % 30 === 0 ? ' major' : '');
@@ -202,18 +227,13 @@
     }
 
     const DIRS = ['正北 (N)', '东北 (NE)', '正东 (E)', '东南 (SE)', '正南 (S)', '西南 (SW)', '正西 (W)', '西北 (NW)'];
-    function getDirectionName(deg) {
-      return DIRS[Math.round(deg / 45) % 8];
-    }
+    const normalize = d => ((d % 360) + 360) % 360;
+    const getDirectionName = deg => DIRS[Math.round(deg / 45) % 8];
 
-    // ---- 平滑旋转：沿最短路径，避免 359° → 0° 时整盘倒转 ----
-    let target = 0;       // 目标方位角（0~360）
-    let shown = 0;        // 当前显示角度（累计值，不取模）
-    let hasData = false;
-    function normalize(d) { return ((d % 360) + 360) % 360; }
-
+    // ---- 平滑旋转（沿最短路径） ----
+    let target = 0, shown = 0;
     function tick() {
-      let diff = ((target - normalize(shown) + 540) % 360) - 180;
+      const diff = ((target - normalize(shown) + 540) % 360) - 180;
       if (Math.abs(diff) > 0.05) {
         shown += diff * 0.2;
         dial.style.transform = `rotate(${-shown}deg)`;
@@ -222,63 +242,118 @@
     }
     requestAnimationFrame(tick);
 
-    function updateText(deg) {
-      const h = Math.round(normalize(deg)) % 360;
-      degreeText.textContent = h + '°';
-      directionText.textContent = getDirectionName(h);
+    // ---- 精度 ----
+    const ACC_TEXT = {
+      0: '精度：不可靠',
+      1: '精度：低',
+      2: '精度：中等',
+      3: '精度：高'
+    };
+    let currentAcc = -1;
+    let calOpen = false;
+    let calStart = 0;
+    let doneTimer = null;
+
+    function renderStatus() {
+      statusText.classList.remove('warn', 'good');
+      if (currentAcc < 0) return;
+      if (currentAcc <= 1) {
+        statusText.textContent = ACC_TEXT[currentAcc] + ' · 点击校准';
+        statusText.classList.add('warn');
+      } else if (currentAcc === 2) {
+        statusText.textContent = ACC_TEXT[2];
+      } else {
+        statusText.textContent = ACC_TEXT[3];
+        statusText.classList.add('good');
+      }
+    }
+
+    function renderBars() {
+      accBars.forEach((b, i) => {
+        b.className = '';
+        if (currentAcc >= 0 && i <= currentAcc) {
+          b.classList.add(currentAcc <= 1 ? 'on-1' : currentAcc === 2 ? 'on-2' : 'on-3');
+        }
+      });
+      accText.textContent = currentAcc < 0 ? '等待传感器数据…' : ACC_TEXT[currentAcc];
     }
 
     // ---- 供 Android 原生代码调用 ----
     window.setHeading = function (deg) {
-      hasData = true;
       target = normalize(deg);
-      updateText(target);
-      if (statusText.dataset.acc === undefined) statusText.textContent = '传感器工作中';
+      const h = Math.round(target) % 360;
+      degreeText.textContent = h + '°';
+      directionText.textContent = getDirectionName(h);
+      if (currentAcc < 0) statusText.textContent = '传感器工作中';
     };
     window.setAccuracy = function (acc) {
-      statusText.dataset.acc = acc;
-      const map = {
-        0: '精度：不可靠 — 请在空中画“8”字校准',
-        1: '精度：低 — 请在空中画“8”字校准',
-        2: '精度：中',
-        3: '精度：高'
-      };
-      statusText.textContent = map[acc] || '传感器工作中';
+      currentAcc = acc;
+      renderStatus();
+      renderBars();
     };
     window.onNativeReady = function (hasSensor) {
-      btn.style.display = 'none'; // App 内无需按钮
-      statusText.textContent = hasSensor ? '请平放手机，远离磁铁/金属' : '此设备没有磁力传感器，无法使用指南针';
+      if (!hasSensor) statusText.textContent = '此设备没有磁力传感器，无法使用指南针';
     };
+
+    // ---- 校准流程 ----
+    function openCal() {
+      calOpen = true;
+      calStart = Date.now();
+      calTitle.textContent = '校准指南针';
+      overlay.classList.add('show');
+      if (IN_APP) {
+        window.AndroidCompass.restartSensors();
+      } else {
+        requestPermission(); // 浏览器下需要用户手势来授权（iOS）
+      }
+      renderBars();
+      clearInterval(doneTimer);
+      doneTimer = setInterval(checkDone, 300);
+    }
+    function restartCal() {
+      calStart = Date.now();
+      calTitle.textContent = '校准指南针';
+      if (IN_APP) window.AndroidCompass.restartSensors();
+    }
+    function closeCal() {
+      calOpen = false;
+      clearInterval(doneTimer);
+      overlay.classList.remove('show');
+    }
+    // 至少画 6 秒、并且精度达到“高”，才自动判定完成
+    function checkDone() {
+      if (!calOpen || !IN_APP) return;
+      if (currentAcc >= 3 && Date.now() - calStart >= 6000) {
+        calTitle.textContent = '✓ 校准完成';
+        clearInterval(doneTimer);
+        setTimeout(closeCal, 1200);
+      }
+    }
 
     // ---- 浏览器（手机 Chrome / Safari）下的备用方案 ----
     function handleOrientation(event) {
       let heading = null;
       if (typeof event.webkitCompassHeading === 'number') {
-        heading = event.webkitCompassHeading;            // iOS
+        heading = event.webkitCompassHeading;     // iOS
       } else if (event.absolute && event.alpha !== null) {
-        heading = 360 - event.alpha;                     // Android Chrome（alpha 为逆时针）
+        heading = 360 - event.alpha;              // Android Chrome
       }
       if (heading !== null) window.setHeading(heading);
     }
-
     function requestPermission() {
+      if (IN_APP) return;
       if (typeof DeviceOrientationEvent !== 'undefined' &&
           typeof DeviceOrientationEvent.requestPermission === 'function') {
         DeviceOrientationEvent.requestPermission().then(res => {
-          if (res === 'granted') {
-            window.addEventListener('deviceorientation', handleOrientation, true);
-          } else {
-            statusText.textContent = '需要传感器权限才能使用指南针';
-          }
+          if (res === 'granted') window.addEventListener('deviceorientation', handleOrientation, true);
+          else statusText.textContent = '需要传感器权限才能使用指南针';
         }).catch(() => { statusText.textContent = '无法获取传感器权限'; });
       } else {
         window.addEventListener('deviceorientationabsolute', handleOrientation, true);
         window.addEventListener('deviceorientation', handleOrientation, true);
       }
     }
-
-    // 浏览器环境下自动尝试一次（App 内由原生代码驱动，onNativeReady 会隐藏按钮）
-    window.addEventListener('DOMContentLoaded', requestPermission);
+    if (!IN_APP) window.addEventListener('DOMContentLoaded', requestPermission);
   </script>
 </body>
 </html>
