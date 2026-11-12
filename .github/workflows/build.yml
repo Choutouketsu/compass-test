@@ -18,38 +18,25 @@ jobs:
       with:
         node-version: 18
 
-    - name: Install Capacitor CLI
-      run: npm install -g @capacitor/cli @capacitor/core @capacitor/android
-
-    - name: Create Capacitor Config
-      run: |
-        npx cap init "Compass App" "com.example.compass" --web-dir www
-
-    - name: Add Android Platform
-      run: |
-        npm install @capacitor/android
-        npx cap add android
-
-    - name: Sync Project
-      run: npx cap sync
-
     - name: Setup Java JDK
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: Force Gradle Mirror and Clean Caches
+    - name: Install Capacitor and Create App
       run: |
-        # 彻底清理可能损坏的Gradle缓存
-        rm -rf ~/.gradle/caches/
-        rm -rf ~/.gradle/wrapper/
-        
-        # 在 Android 项目的 build.gradle 顶部直接强制重写 repositories
-        BUILD_G_FILE="android/build.gradle"
-        if [ -f "$BUILD_G_FILE" ]; then
-          sed -i '1i allprojects { repositories { maven { url "https://mirrors.cloud.tencent.com/nexus/content/groups/public/" } maven { url "https://maven.aliyun.com/repository/public" } google() mavenCentral() } }' $BUILD_G_FILE
-          echo "Injected global Tencent/Aliyun mirrors successfully!"
+        npm install -g @capacitor/cli @capacitor/core @capacitor/android
+        npx cap init "Compass App" "com.example.compass" --web-dir www
+        npm install @capacitor/android
+        npx cap add android
+
+    - name: Use Stable Gradle Dependencies
+      run: |
+        # 移除可能引起下载冲突的第三方加密包，确保使用 Gradle 内置安全库
+        ANDROID_BUILD="android/app/build.gradle"
+        if [ -f "$ANDROID_BUILD" ]; then
+          sed -i '/bcprov/d' $ANDROID_BUILD || true
         fi
 
     - name: Build Debug APK
