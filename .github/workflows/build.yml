@@ -23,7 +23,7 @@ jobs:
 
     - name: Create Capacitor Config
       run: |
-        npx cap init "Compass App" "com.example.compass" --web-dir .
+        npx cap init "Compass App" "com.example.compass" --web-dir www
 
     - name: Add Android Platform
       run: |
