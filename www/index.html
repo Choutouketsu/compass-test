@@ -5,11 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>炫酷指南针</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
       color: #f8fafc;
@@ -23,19 +19,15 @@
       overflow: hidden;
     }
 
-    /* 顶部信息面板 */
-    .header {
-      text-align: center;
-      margin-top: 20px;
-    }
+    .header { text-align: center; margin-top: 20px; }
     .degrees {
       font-size: 64px;
       font-weight: 800;
       letter-spacing: -2px;
       background: linear-gradient(to right, #38bdf8, #818cf8);
       -webkit-background-clip: text;
+      background-clip: text;
       -webkit-text-fill-color: transparent;
-      text-shadow: 0 0 30px rgba(56, 189, 248, 0.3);
     }
     .direction {
       font-size: 20px;
@@ -48,7 +40,6 @@
       margin-top: 8px;
     }
 
-    /* 指南针主体容器 */
     .compass-wrapper {
       position: relative;
       width: 300px;
@@ -57,8 +48,6 @@
       align-items: center;
       justify-content: center;
     }
-
-    /* 外发光环 */
     .compass-glow {
       position: absolute;
       width: 100%;
@@ -67,73 +56,93 @@
       background: radial-gradient(circle, rgba(56,189,248,0.15) 0%, rgba(0,0,0,0) 70%);
       box-shadow: inset 0 0 20px rgba(56, 189, 248, 0.2);
     }
+    /* 固定在顶部的“手机朝向”标记 */
+    .heading-marker {
+      position: absolute;
+      top: -6px;
+      left: 50%;
+      margin-left: -9px;
+      width: 0; height: 0;
+      border-left: 9px solid transparent;
+      border-right: 9px solid transparent;
+      border-top: 16px solid #38bdf8;
+      filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.8));
+      z-index: 5;
+    }
 
-    /* 表盘刻度盘 */
     .compass-dial {
       width: 260px;
       height: 260px;
       border-radius: 50%;
       border: 2px solid rgba(255, 255, 255, 0.1);
       position: relative;
-      transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      will-change: transform;
     }
-
-    /* 盘面刻度与方位字母 */
     .dial-mark {
       position: absolute;
       font-weight: bold;
       font-size: 14px;
       color: #94a3b8;
+      width: 24px;
+      text-align: center;
     }
-    .mark-n { top: 10px; color: #f43f5e; font-size: 18px; }
-    .mark-s { bottom: 10px; }
-    .mark-e { right: 12px; }
-    .mark-w { left: 12px; }
+    .mark-n { top: 10px; left: 50%; margin-left: -12px; color: #f43f5e; font-size: 18px; }
+    .mark-s { bottom: 10px; left: 50%; margin-left: -12px; }
+    .mark-e { right: 8px; top: 50%; margin-top: -9px; }
+    .mark-w { left: 8px; top: 50%; margin-top: -9px; }
 
-    /* 精美指针 */
+    /* 刻度线 */
+    .tick {
+      position: absolute;
+      left: 50%; top: 0;
+      width: 2px; height: 100%;
+      margin-left: -1px;
+    }
+    .tick::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0;
+      width: 2px; height: 8px;
+      background: rgba(255,255,255,0.25);
+    }
+    .tick.major::before { height: 14px; background: rgba(255,255,255,0.5); }
+
     .pointer-group {
       position: absolute;
-      width: 100%;
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      inset: 0;
     }
     .needle-n {
       position: absolute;
-      top: 30px;
+      top: 38px;
+      left: 50%;
+      margin-left: -10px;
       width: 0; height: 0;
       border-left: 10px solid transparent;
       border-right: 10px solid transparent;
-      border-bottom: 95px solid #f43f5e; /* 红枫红：北 */
+      border-bottom: 92px solid #f43f5e;
       filter: drop-shadow(0 0 6px rgba(244, 63, 94, 0.6));
     }
     .needle-s {
       position: absolute;
-      bottom: 30px;
+      bottom: 38px;
+      left: 50%;
+      margin-left: -10px;
       width: 0; height: 0;
       border-left: 10px solid transparent;
       border-right: 10px solid transparent;
-      border-top: 95px solid #94a3b8; /* 银灰：南 */
+      border-top: 92px solid #94a3b8;
     }
     .center-hub {
-      width: 20px;
-      height: 20px;
+      position: absolute;
+      width: 20px; height: 20px;
       background: linear-gradient(135deg, #f8fafc, #cbd5e1);
       border-radius: 50%;
       box-shadow: 0 0 10px rgba(0,0,0,0.5);
       z-index: 10;
     }
 
-    /* 底部控制区 */
-    .footer {
-      width: 100%;
-      max-width: 300px;
-      margin-bottom: 20px;
-    }
+    .footer { width: 100%; max-width: 300px; margin-bottom: 20px; text-align: center; }
+    .status { font-size: 13px; color: #94a3b8; min-height: 20px; margin-bottom: 12px; }
     .btn {
       width: 100%;
       padding: 14px;
@@ -145,30 +154,25 @@
       font-weight: 600;
       box-shadow: 0 4px 20px rgba(37, 99, 235, 0.4);
       cursor: pointer;
-      transition: transform 0.2s, opacity 0.2s;
     }
-    .btn:active {
-      transform: scale(0.96);
-    }
+    .btn:active { transform: scale(0.96); }
   </style>
 </head>
 <body>
 
   <div class="header">
     <div class="degrees" id="degreeText">0°</div>
-    <div class="direction" id="directionText">正北</div>
+    <div class="direction" id="directionText">正北 (N)</div>
   </div>
 
   <div class="compass-wrapper">
     <div class="compass-glow"></div>
+    <div class="heading-marker"></div>
     <div class="compass-dial" id="dial">
-      <!-- 盘面方位标识 -->
       <span class="dial-mark mark-n">N</span>
       <span class="dial-mark mark-e">E</span>
       <span class="dial-mark mark-s">S</span>
       <span class="dial-mark mark-w">W</span>
-      
-      <!-- 中心发光指针 -->
       <div class="pointer-group">
         <div class="needle-n"></div>
         <div class="needle-s"></div>
@@ -178,55 +182,103 @@
   </div>
 
   <div class="footer">
-    <button class="btn" onclick="requestPermission()">校准 / 开启传感器</button>
+    <div class="status" id="statusText">正在等待传感器…</div>
+    <button class="btn" id="btn" onclick="requestPermission()">校准 / 开启传感器</button>
   </div>
 
   <script>
     const dial = document.getElementById('dial');
     const degreeText = document.getElementById('degreeText');
     const directionText = document.getElementById('directionText');
+    const statusText = document.getElementById('statusText');
+    const btn = document.getElementById('btn');
 
-    function getDirectionName(deg) {
-      const dirs = ['正北 (N)', '东北 (NE)', '正东 (E)', '东南 (SE)', '正南 (S)', '西南 (SW)', '正西 (W)', '西北 (NW)'];
-      const index = Math.round(deg / 45) % 8;
-      return dirs[index];
+    // 生成刻度线（每 10° 一条，每 30° 加粗）
+    for (let a = 0; a < 360; a += 10) {
+      const t = document.createElement('div');
+      t.className = 'tick' + (a % 30 === 0 ? ' major' : '');
+      t.style.transform = `rotate(${a}deg)`;
+      dial.appendChild(t);
     }
 
-    function handleOrientation(event) {
-      let compassHeading = event.alpha;
-      
-      if (event.webkitCompassHeading) {
-        compassHeading = event.webkitCompassHeading;
-      }
+    const DIRS = ['正北 (N)', '东北 (NE)', '正东 (E)', '东南 (SE)', '正南 (S)', '西南 (SW)', '正西 (W)', '西北 (NW)'];
+    function getDirectionName(deg) {
+      return DIRS[Math.round(deg / 45) % 8];
+    }
 
-      if (compassHeading !== null && compassHeading !== undefined) {
-        const heading = Math.round(compassHeading);
-        // 让整个表盘随方向平滑反向旋转
-        dial.style.transform = `rotate(${-heading}deg)`;
-        degreeText.innerText = `${heading}°`;
-        directionText.innerText = getDirectionName(heading);
+    // ---- 平滑旋转：沿最短路径，避免 359° → 0° 时整盘倒转 ----
+    let target = 0;       // 目标方位角（0~360）
+    let shown = 0;        // 当前显示角度（累计值，不取模）
+    let hasData = false;
+    function normalize(d) { return ((d % 360) + 360) % 360; }
+
+    function tick() {
+      let diff = ((target - normalize(shown) + 540) % 360) - 180;
+      if (Math.abs(diff) > 0.05) {
+        shown += diff * 0.2;
+        dial.style.transform = `rotate(${-shown}deg)`;
       }
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    function updateText(deg) {
+      const h = Math.round(normalize(deg)) % 360;
+      degreeText.textContent = h + '°';
+      directionText.textContent = getDirectionName(h);
+    }
+
+    // ---- 供 Android 原生代码调用 ----
+    window.setHeading = function (deg) {
+      hasData = true;
+      target = normalize(deg);
+      updateText(target);
+      if (statusText.dataset.acc === undefined) statusText.textContent = '传感器工作中';
+    };
+    window.setAccuracy = function (acc) {
+      statusText.dataset.acc = acc;
+      const map = {
+        0: '精度：不可靠 — 请在空中画“8”字校准',
+        1: '精度：低 — 请在空中画“8”字校准',
+        2: '精度：中',
+        3: '精度：高'
+      };
+      statusText.textContent = map[acc] || '传感器工作中';
+    };
+    window.onNativeReady = function (hasSensor) {
+      btn.style.display = 'none'; // App 内无需按钮
+      statusText.textContent = hasSensor ? '请平放手机，远离磁铁/金属' : '此设备没有磁力传感器，无法使用指南针';
+    };
+
+    // ---- 浏览器（手机 Chrome / Safari）下的备用方案 ----
+    function handleOrientation(event) {
+      let heading = null;
+      if (typeof event.webkitCompassHeading === 'number') {
+        heading = event.webkitCompassHeading;            // iOS
+      } else if (event.absolute && event.alpha !== null) {
+        heading = 360 - event.alpha;                     // Android Chrome（alpha 为逆时针）
+      }
+      if (heading !== null) window.setHeading(heading);
     }
 
     function requestPermission() {
-      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        DeviceOrientationEvent.requestPermission().then(response => {
-          if (response === 'granted') {
+      if (typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission().then(res => {
+          if (res === 'granted') {
             window.addEventListener('deviceorientation', handleOrientation, true);
           } else {
-            alert('需要传感器权限以正常使用指南针');
+            statusText.textContent = '需要传感器权限才能使用指南针';
           }
-        });
+        }).catch(() => { statusText.textContent = '无法获取传感器权限'; });
       } else {
         window.addEventListener('deviceorientationabsolute', handleOrientation, true);
         window.addEventListener('deviceorientation', handleOrientation, true);
-        alert('已尝试启用方向传感器，请在开阔处平放手机测试。');
       }
     }
 
-    window.addEventListener('DOMContentLoaded', () => {
-      requestPermission();
-    });
+    // 浏览器环境下自动尝试一次（App 内由原生代码驱动，onNativeReady 会隐藏按钮）
+    window.addEventListener('DOMContentLoaded', requestPermission);
   </script>
 </body>
 </html>
